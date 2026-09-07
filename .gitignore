@@ -1,0 +1,43 @@
+# --- Secrets / local config ---
+# Never commit real credentials — .env.example is the tracked template.
+.env
+.env.*
+!.env.example
+
+# --- Gradle / Grails build output ---
+build/
+out/
+.gradle/
+bin/
+!gradle/wrapper/gradle-wrapper.jar
+
+# --- Logs ---
+logs/
+*.log
+
+# --- Backup / scratch files ---
+# e.g. Application.groovy.back, application.yml.back left by editors
+*.back
+*.bak
+*.orig
+*.swp
+*~
+
+# --- IDE ---
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.settings/
+.classpath
+.project
+.factorypath
+
+# --- OS cruft ---
+.DS_Store
+Thumbs.db
+
+# --- Grails-generated ---
+.gradletasknamecache
+grails-app/conf/*.orig

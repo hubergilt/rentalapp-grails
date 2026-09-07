@@ -1,0 +1,159 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        maven { url "https://repo.grails.org/grails/core" }
+    }
+    dependencies {
+        classpath "org.grails:grails-gradle-plugin:$grailsGradlePluginVersion"
+    }
+}
+
+plugins {
+    id "eclipse"
+    id "idea"
+    // Grails 6.2.x's own core modules (e.g. grails-plugin-codecs) still
+    // depend directly on javax.servlet-api 4.0.1 — i.e. Grails 6.2.x's real
+    // baseline is Spring Boot 2.x, not 3.x. Forcing Boot 3 here caused the
+    // generated ApplicationLoader's javax.servlet.ServletContext override to
+    // never match Boot 3's jakarta-only SpringBootServletInitializer. 2.7.18
+    // is the last, Java-17-compatible release of the 2.x line.
+    id "org.springframework.boot" version "2.7.18"
+}
+
+version "0.1.0"
+group "rentalapp"
+
+repositories {
+    mavenCentral()
+    maven { url "https://repo.grails.org/grails/core" }
+}
+
+configurations {
+    // grails-gradle-plugin 6.2.x looks up a 'console' configuration
+    // internally while applying org.grails.grails-web, even if you never
+    // add anything to it (legacy grails-console wiring). It MUST exist
+    // before that plugin is applied — hence declaring it here, and applying
+    // org.grails.grails-web/-gsp classically below (via the buildscript
+    // classpath dependency) rather than through the plugins{} DSL, which
+    // would apply them too early, before this configurations{} block runs.
+    //
+    // NOTE: don't also declare `developmentOnly` here — org.grails.grails-web
+    // creates and wires that configuration (for spring-boot-devtools) itself
+    // when applied just below; declaring it twice collides.
+    console
+}
+
+// Applied classically (not via plugins{}) so they run after the
+// 'console' configuration above already exists — see the comment on it.
+apply plugin: "org.grails.grails-web"
+apply plugin: "org.grails.grails-gsp"
+
+dependencies {
+    // --- Grails core ---
+    developmentOnly("org.springframework.boot:spring-boot-devtools")
+    implementation "org.springframework.boot:spring-boot-starter-logging"
+    implementation "org.springframework.boot:spring-boot-autoconfigure"
+    implementation "org.grails:grails-core"
+    implementation "org.springframework.boot:spring-boot-starter-actuator"
+    implementation "org.springframework.boot:spring-boot-starter-tomcat"
+    implementation "org.grails:grails-web-boot"
+    implementation "org.grails:grails-logging"
+    implementation "org.grails:grails-plugin-rest"
+    implementation "org.grails:grails-plugin-databinding"
+    implementation "org.grails:grails-plugin-i18n"
+    implementation "org.grails:grails-plugin-services"
+    implementation "org.grails:grails-plugin-url-mappings"
+    implementation "org.grails:grails-plugin-interceptors"
+    implementation "org.grails.plugins:cache"
+    implementation "org.grails.plugins:async"
+    implementation "org.grails.plugins:scaffolding"          // dynamic + generated CRUD scaffolding
+    implementation "org.grails.plugins:gsp"
+    implementation "org.grails.plugins:hibernate5"            // GORM/Hibernate mapping onto the live schema
+    // Branding assets (CSS/JS/logo) are served as plain Spring Boot static
+    // resources from src/main/resources/static — no asset-pipeline plugin
+    // needed. (This project briefly forced Spring Boot 3/jakarta, where
+    // asset-pipeline's javax.servlet-based filter genuinely conflicted; now
+    // on Boot 2.7/javax it would actually be compatible again, but for 3
+    // static files plain resource serving is simpler and one less plugin.)
+
+    // --- Database: schema owned by Flyway (external), engine picked via .env ---
+    // MySQL driver — kept even while Postgres is active, since DB_* in .env
+    // can be flipped back to the commented-out MySQL block at any time.
+    runtimeOnly "com.mysql:mysql-connector-j:8.4.0"
+    runtimeOnly "com.h2database:h2"                            // used only for the `test` environment
+
+    // Lets Connector/J dial a non-default unix socket (see DB_SOCKET in .env.example)
+    // instead of only ever connecting over TCP — needed when MySQL is reached
+    // through an environment-modules-managed socket rather than the OS default.
+    runtimeOnly "com.kohlschutter.junixsocket:junixsocket-mysql:2.9.1"
+    // junixsocket-mysql alone only pulls in the Java-side API — the actual
+    // native (.so/.dll) binaries ship in this separate artifact. Without it:
+    // UnsatisfiedLinkError: Could not load native library junixsocket-native.
+    runtimeOnly "com.kohlschutter.junixsocket:junixsocket-native-common:2.9.1"
+
+    // PostgreSQL driver — the active engine per .env (DB_PORT=5432 block uncommented).
+    runtimeOnly "org.postgresql:postgresql:42.7.13"
+
+    // --- .env loading is handled explicitly in Application.groovy
+    //     (loadDotEnv()) rather than via a third-party auto-detecting
+    //     library — see the comment there for why. ---
+
+    // --- Password hashing only (BCrypt) for the simple form-based login;
+    //     intentionally NOT pulling in the whole Spring Security Core plugin,
+    //     since there's no GORM-backed User/Role table in rentaldb's schema.
+    //     5.8.x targets Spring Framework 5 (Boot 2.7's line) — the 6.x
+    //     releases target Spring Framework 6 / Boot 3 and won't resolve
+    //     cleanly here. ---
+    implementation "org.springframework.security:spring-security-crypto:5.8.13"
+
+    // --- Testing ---
+    testImplementation "org.grails:grails-gorm-testing-support"
+    testImplementation "org.mockito:mockito-core"
+    testImplementation "org.grails:grails-web-testing-support"
+}
+
+springBoot {
+    mainClass = 'rentalapp.Application'
+}
+
+bootRun {
+    workingDir = project.projectDir   // guarantees Application.groovy finds .env at the project root
+    jvmArgs('-Dspring.output.ansi.enabled=always')
+    sourceResources sourceSets.main
+    String springProfilesActive = 'spring.profiles.active'
+    systemProperty springProfilesActive, System.getProperty(springProfilesActive)
+}
+
+tasks.withType(GroovyCompile) {
+    configure(groovyOptions) {
+        forkOptions.jvmArgs = ['-Xmx1024m']
+    }
+}
+
+// -----------------------------------------------------------------------
+// Convenience task: `./gradlew serve` == `./gradlew bootRun`
+// (bootRun already exists via the spring-boot plugin; this is just a
+// friendlier alias some teams prefer, e.g. `./gradlew serve -Dserver.port=9090`)
+// -----------------------------------------------------------------------
+tasks.register('serve') {
+    group = 'application'
+    description = 'Alias for bootRun — starts the embedded Tomcat server for rentalapp.'
+    dependsOn 'bootRun'
+}
+
+// -----------------------------------------------------------------------
+// Convenience task: BCrypt-hash the admin password for ADMIN_PASSWORD_HASH,
+// without pulling in the (unreliable-to-resolve) grails-console plugin.
+// Usage: ./gradlew hashPassword -Ppassword=yourRealPassword
+// -----------------------------------------------------------------------
+tasks.register('hashPassword', JavaExec) {
+    group = 'application'
+    description = 'Prints a BCrypt hash for a password — usage: ./gradlew hashPassword -Ppassword=yourRealPassword'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'rentalapp.HashPassword'
+    args = [project.findProperty('password')?.toString() ?: '']
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}

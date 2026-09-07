@@ -1,0 +1,198 @@
+---
+info:
+  app:
+    name: '@info.app.name@'
+    version: '@info.app.version@'
+    grailsVersion: '@info.app.grailsVersion@'
+spring:
+  main:
+    banner-mode: 'off'
+  groovy:
+    template:
+      check-template-location: false
+
+# ---------------------------------------------------------------------------
+# rentalapp branding — read by the layout / navigation (grails-app/views/layouts/main.gsp)
+# ---------------------------------------------------------------------------
+rentalapp:
+  brand:
+    appName: "${APP_NAME:RentalApp}"
+    tagline: "${APP_TAGLINE:Rooms, tenants & rent — all in one place}"
+    logo: "/assets/rentalapp-logo.svg"
+    theme: "${APP_THEME:slate}"     # slate | ocean | sunset — see stylesheets/theme-*.scss
+  auth:
+    # Simple form-based login gating every scaffolded screen (see LoginController
+    # + SecurityInterceptor). Not backed by GORM/rentaldb — credentials are
+    # externalised env vars, never hardcoded or stored in the app database,
+    # since rentaldb's schema belongs to Flyway, not to this app.
+    adminUsername: "${ADMIN_USERNAME:admin}"
+    adminPasswordHash: "${ADMIN_PASSWORD_HASH:}"   # BCrypt hash; see .env.example
+
+---
+grails:
+  profile: web
+  codegen:
+    defaultPackage: rentalapp
+  gorm:
+    # ---------------------------------------------------------------------
+    # THE schema is owned by Flyway (see the external `rentaldb` project's
+    # sql/V1..V13 migrations). GORM must never create, update, or validate-
+    # and-alter it. This is intentionally not overridable per-environment.
+    # ---------------------------------------------------------------------
+    default:
+      mapping:
+        cache: false
+  mime:
+    disable:
+      accept:
+        header:
+          userAgents:
+            - Gecko
+            - WebKit
+            - Presto
+            - Trident
+    types:
+      all: '*/*'
+      atom: application/atom+xml
+      css: text/css
+      csv: text/csv
+      form: application/x-www-form-urlencoded
+      html:
+        - text/html
+        - application/xhtml+xml
+      js: text/javascript
+      json:
+        - application/json
+        - text/json
+      multipartForm: multipart/form-data
+      rss: application/rss+xml
+      text: text/plain
+      hal:
+        - application/hal+json
+        - application/hal+xml
+      xml:
+        - text/xml
+        - application/xml
+  urlmapping:
+    cache:
+      maxsize: 1000
+  controllers:
+    defaultScope: singleton
+  converters:
+    encoding: UTF-8
+  views:
+    default:
+      codec: html
+    gsp:
+      encoding: UTF-8
+      htmlcodec: xml
+      codecs:
+        expression: html
+        scriptlet: html
+        taglib: none
+        staticparts: none
+  # Scaffolding-generated views/controllers ARE the admin UI (per requirements) —
+  # no separate hand-built frontend.
+  # NOTE: do NOT set grails.scaffolding.templates.domainSuffix here. It leaks into
+  # RestResponderGrailsPlugin's DefaultRendererRegistry.modelSuffix, so `respond tenant`
+  # would put the object in the model as `tenantController` instead of `tenant`, which
+  # breaks the generated views that expect `${tenant}` / `${tenantList}`.
+
+info:
+  app:
+    name: '@info.app.name@'
+    version: '@info.app.version@'
+    grailsVersion: '@info.app.grailsVersion@'
+
+spring:
+  main:
+    banner-mode: 'off'
+
+endpoints:
+  enabled: false
+  jmx:
+    enabled: true
+
+---
+# ===========================================================================
+# Datasource — connects to the EXISTING rentaldb schema, created/migrated by
+# Flyway. Grails/GORM never creates or alters tables (dbCreate: none, always).
+#
+# Actual connection details come from environment variables (see .env.example
+# and README). The JDBC url itself (TCP vs unix-socket via DB_SOCKET) is
+# resolved in Application.groovy before Spring Boot even starts, and injected
+# here as the `dataSource.url` system property, which overrides the default
+# below whenever it is set.
+# ===========================================================================
+dataSource:
+  pooled: true
+  jmxExport: true
+  # driverClassName/dialect/url are overridden at startup by Application.groovy
+  # based on DB_ENGINE in .env (see ENGINE_DATASOURCE_DEFAULTS there) — that's
+  # the single source of truth now, so switching DB_ENGINE doesn't require
+  # touching this file. The values below are only used as a fallback if
+  # Application.main() is ever bypassed as the entry point.
+  driverClassName: org.postgresql.Driver
+  dialect: org.hibernate.dialect.PostgreSQLDialect
+  # Previous fallback, before switching the active engine to PostgreSQL —
+  # kept here for reference in case MySQL needs to become the fallback again:
+  #   driverClassName: com.mysql.cj.jdbc.Driver
+  #   dialect: org.hibernate.dialect.MySQL8Dialect
+  #   url: "${DB_URL:jdbc:mysql://localhost:3306/rentaldb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8&useUnicode=true}"
+  dbCreate: none              # <-- permanent. Flyway (external) owns the schema.
+  url: "${DB_URL:jdbc:postgresql://localhost:5432/rentaldb}"
+  username: "${DB_USERNAME:rentalapp}"
+  password: "${DB_PASSWORD:}"
+  properties:
+    jmxEnabled: true
+    initialSize: 2
+    minIdle: 2
+    maxIdle: 10
+    maxActive: 20
+    minEvictableIdleTimeMillis: 60000
+    timeBetweenEvictionRunsMillis: 60000
+    maxAge: 600000
+    testOnBorrow: true
+    testWhileIdle: true
+    testOnReturn: false
+    validationQuery: SELECT 1
+    validationQueryTimeout: 3
+    validationInterval: 15000
+    ignoreExceptionOnPreLoad: false
+
+hibernate:
+    cache:
+        queries: false
+        use_second_level_cache: false
+        use_query_cache: false
+
+---
+grails:
+  cache:
+    clearAtStartup: false
+
+environments:
+  development:
+    dataSource:
+      dbCreate: none
+      logSql: "${DB_LOG_SQL:false}"
+  test:
+    dataSource:
+      # Only the `test` env uses an in-memory DB (see build.gradle: h2), so unit
+      # tests never touch the real rentaldb / Flyway-owned schema.
+      pooled: true
+      driverClassName: org.h2.Driver
+      dialect: org.hibernate.dialect.H2Dialect
+      url: jdbc:h2:mem:testDb;MVCC=TRUE;LOCK_TIMEOUT=10000;DB_CLOSE_ON_EXIT=FALSE
+      username: sa
+      password: ''
+      dbCreate: create-drop   # fine here only — H2 is a disposable test double
+  production:
+    dataSource:
+      dbCreate: none
+      logSql: false
+      properties:
+        jmxEnabled: true
+        maxActive: 50
+        minIdle: 5
+        maxIdle: 25
