@@ -118,35 +118,54 @@ endpoints:
 # Datasource — connects to the EXISTING rentaldb schema, created/migrated by
 # Flyway. Grails/GORM never creates or alters tables (dbCreate: none, always).
 #
-# Actual connection details come from environment variables (see .env.example
-# and README). The JDBC url itself (TCP vs unix-socket via DB_SOCKET) is
-# resolved in Application.groovy before Spring Boot even starts, and injected
-# here as the `dataSource.url` system property, which overrides the default
-# below whenever it is set.
+# Which engine is active is decided entirely below: uncomment ONE of the
+# per-engine blocks and comment out the rest. Each block's url is built
+# purely from ${VAR:default} placeholders reading .env — see .env.example
+# for what each engine needs (DB_HOST, DB_PORT, DB_SERVICE_NAME, etc).
+# Application.groovy only loads .env into system properties; it has no
+# per-engine logic of its own.
 # ===========================================================================
 dataSource:
   pooled: true
   jmxExport: true
-  # driverClassName/dialect/url are overridden at startup by Application.groovy
-  # based on DB_ENGINE in .env (see ENGINE_DATASOURCE_DEFAULTS there) — that's
-  # the single source of truth now, so switching DB_ENGINE doesn't require
-  # touching this file. The values below are only used as a fallback if
-  # Application.main() is ever bypassed as the entry point.
-  # PostgreSQL — commented out while MySQL is the active engine (DB_ENGINE=mysql in .env):
-  #driverClassName: org.postgresql.Driver
-  #dialect: org.hibernate.dialect.PostgreSQLDialect
-  # Oracle — commented out while MySQL is the active engine:
+
+  # ---------------------------------------------------------------------
+  # Uncomment exactly ONE of the four blocks below to pick the active
+  # engine — comment out whichever was active before. Each block is
+  # self-contained (driverClassName + dialect + url) and reads its
+  # connection details straight from .env via ${VAR:default} placeholders,
+  # so nothing outside this file needs to change when switching engines.
+  # The matching JDBC driver for all four is already in build.gradle.
+  # ---------------------------------------------------------------------
+
+  # --- MySQL (plain TCP) ---
+  # driverClassName: com.mysql.cj.jdbc.Driver
+  # dialect: org.hibernate.dialect.MySQL8Dialect
+  # url: "${DB_URL:jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:rentaldb}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8&useUnicode=true}"
+
+  # --- MySQL (unix socket, e.g. environment-modules-managed MySQL) ---
+  # Fill in DB_SOCKET in .env with the socket path; leave DB_HOST/DB_PORT unused.
+  # driverClassName: com.mysql.cj.jdbc.Driver
+  # dialect: org.hibernate.dialect.MySQL8Dialect
+  # url: "${DB_URL:jdbc:mysql://localhost/${DB_NAME:rentaldb}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8&useUnicode=true&socketFactory=org.newsclub.net.mysql.AFUNIXDatabaseSocketFactory&junixsocket.file=${DB_SOCKET:}}"
+
+  # --- PostgreSQL ---
+  # driverClassName: org.postgresql.Driver
+  # dialect: org.hibernate.dialect.PostgreSQLDialect
+  # url: "${DB_URL:jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:rentaldb}}"
+
+  # --- Oracle (active) ---
+  # DB_SERVICE_NAME in .env; falls back to DB_NAME if unset.
   #driverClassName: oracle.jdbc.OracleDriver
   #dialect: org.hibernate.dialect.OracleDialect
-  # SQL Server — commented out while MySQL is the active engine:
-  #driverClassName: com.microsoft.sqlserver.jdbc.SQLServerDriver
-  #dialect: org.hibernate.dialect.SQLServerDialect
-  # MySQL — active:
-  driverClassName: com.mysql.cj.jdbc.Driver
-  dialect: org.hibernate.dialect.MySQL8Dialect
-  url: "${DB_URL:jdbc:mysql://localhost:3306/rentaldb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8&useUnicode=true}"
+  #url: "${DB_URL:jdbc:oracle:thin:@//${DB_HOST:localhost}:${DB_PORT:1521}/${DB_SERVICE_NAME:${DB_NAME:rentaldb}}}"
+
+  # --- SQL Server ---
+  driverClassName: com.microsoft.sqlserver.jdbc.SQLServerDriver
+  dialect: org.hibernate.dialect.SQLServerDialect
+  url: "${DB_URL:jdbc:sqlserver://${DB_HOST:localhost}:${DB_PORT:1433};databaseName=${DB_NAME:rentaldb};encrypt=${DB_ENCRYPT:true};trustServerCertificate=${DB_TRUST_SERVER_CERTIFICATE:true}}"
+
   dbCreate: none # <-- permanent. Flyway (external) owns the schema.
-  # url: "${DB_URL:jdbc:postgresql://localhost:5432/rentaldb}"
   username: "${DB_USERNAME:rentalapp}"
   password: "${DB_PASSWORD:}"
   properties:
