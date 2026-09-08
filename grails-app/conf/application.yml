@@ -1,12 +1,12 @@
 ---
 info:
   app:
-    name: '@info.app.name@'
-    version: '@info.app.version@'
-    grailsVersion: '@info.app.grailsVersion@'
+    name: "@info.app.name@"
+    version: "@info.app.version@"
+    grailsVersion: "@info.app.grailsVersion@"
 spring:
   main:
-    banner-mode: 'off'
+    banner-mode: "off"
   groovy:
     template:
       check-template-location: false
@@ -19,14 +19,14 @@ rentalapp:
     appName: "${APP_NAME:RentalApp}"
     tagline: "${APP_TAGLINE:Rooms, tenants & rent — all in one place}"
     logo: "/assets/rentalapp-logo.svg"
-    theme: "${APP_THEME:slate}"     # slate | ocean | sunset — see stylesheets/theme-*.scss
+    theme: "${APP_THEME:slate}" # slate | ocean | sunset — see stylesheets/theme-*.scss
   auth:
     # Simple form-based login gating every scaffolded screen (see LoginController
     # + SecurityInterceptor). Not backed by GORM/rentaldb — credentials are
     # externalised env vars, never hardcoded or stored in the app database,
     # since rentaldb's schema belongs to Flyway, not to this app.
     adminUsername: "${ADMIN_USERNAME:admin}"
-    adminPasswordHash: "${ADMIN_PASSWORD_HASH:}"   # BCrypt hash; see .env.example
+    adminPasswordHash: "${ADMIN_PASSWORD_HASH:}" # BCrypt hash; see .env.example
 
 ---
 grails:
@@ -52,7 +52,7 @@ grails:
             - Presto
             - Trident
     types:
-      all: '*/*'
+      all: "*/*"
       atom: application/atom+xml
       css: text/css
       csv: text/csv
@@ -100,13 +100,13 @@ grails:
 
 info:
   app:
-    name: '@info.app.name@'
-    version: '@info.app.version@'
-    grailsVersion: '@info.app.grailsVersion@'
+    name: "@info.app.name@"
+    version: "@info.app.version@"
+    grailsVersion: "@info.app.grailsVersion@"
 
 spring:
   main:
-    banner-mode: 'off'
+    banner-mode: "off"
 
 endpoints:
   enabled: false
@@ -132,15 +132,21 @@ dataSource:
   # the single source of truth now, so switching DB_ENGINE doesn't require
   # touching this file. The values below are only used as a fallback if
   # Application.main() is ever bypassed as the entry point.
-  driverClassName: org.postgresql.Driver
-  dialect: org.hibernate.dialect.PostgreSQLDialect
-  # Previous fallback, before switching the active engine to PostgreSQL —
-  # kept here for reference in case MySQL needs to become the fallback again:
-  #   driverClassName: com.mysql.cj.jdbc.Driver
-  #   dialect: org.hibernate.dialect.MySQL8Dialect
-  #   url: "${DB_URL:jdbc:mysql://localhost:3306/rentaldb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8&useUnicode=true}"
-  dbCreate: none              # <-- permanent. Flyway (external) owns the schema.
-  url: "${DB_URL:jdbc:postgresql://localhost:5432/rentaldb}"
+  # PostgreSQL — commented out while MySQL is the active engine (DB_ENGINE=mysql in .env):
+  #driverClassName: org.postgresql.Driver
+  #dialect: org.hibernate.dialect.PostgreSQLDialect
+  # Oracle — commented out while MySQL is the active engine:
+  #driverClassName: oracle.jdbc.OracleDriver
+  #dialect: org.hibernate.dialect.OracleDialect
+  # SQL Server — commented out while MySQL is the active engine:
+  #driverClassName: com.microsoft.sqlserver.jdbc.SQLServerDriver
+  #dialect: org.hibernate.dialect.SQLServerDialect
+  # MySQL — active:
+  driverClassName: com.mysql.cj.jdbc.Driver
+  dialect: org.hibernate.dialect.MySQL8Dialect
+  url: "${DB_URL:jdbc:mysql://localhost:3306/rentaldb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8&useUnicode=true}"
+  dbCreate: none # <-- permanent. Flyway (external) owns the schema.
+  # url: "${DB_URL:jdbc:postgresql://localhost:5432/rentaldb}"
   username: "${DB_USERNAME:rentalapp}"
   password: "${DB_PASSWORD:}"
   properties:
@@ -161,10 +167,10 @@ dataSource:
     ignoreExceptionOnPreLoad: false
 
 hibernate:
-    cache:
-        queries: false
-        use_second_level_cache: false
-        use_query_cache: false
+  cache:
+    queries: false
+    use_second_level_cache: false
+    use_query_cache: false
 
 ---
 grails:
@@ -185,8 +191,8 @@ environments:
       dialect: org.hibernate.dialect.H2Dialect
       url: jdbc:h2:mem:testDb;MVCC=TRUE;LOCK_TIMEOUT=10000;DB_CLOSE_ON_EXIT=FALSE
       username: sa
-      password: ''
-      dbCreate: create-drop   # fine here only — H2 is a disposable test double
+      password: ""
+      dbCreate: create-drop # fine here only — H2 is a disposable test double
   production:
     dataSource:
       dbCreate: none

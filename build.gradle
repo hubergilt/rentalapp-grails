@@ -77,8 +77,9 @@ dependencies {
     // static files plain resource serving is simpler and one less plugin.)
 
     // --- Database: schema owned by Flyway (external), engine picked via .env ---
-    // MySQL driver — kept even while Postgres is active, since DB_* in .env
-    // can be flipped back to the commented-out MySQL block at any time.
+    // All four drivers are declared so DB_ENGINE in .env can pick any of
+    // them without a build.gradle change — see ENGINE_DATASOURCE_DEFAULTS in
+    // Application.groovy for the matching driverClassName/dialect per engine.
     runtimeOnly "com.mysql:mysql-connector-j:8.4.0"
     runtimeOnly "com.h2database:h2"                            // used only for the `test` environment
 
@@ -91,8 +92,19 @@ dependencies {
     // UnsatisfiedLinkError: Could not load native library junixsocket-native.
     runtimeOnly "com.kohlschutter.junixsocket:junixsocket-native-common:2.9.1"
 
-    // PostgreSQL driver — the active engine per .env (DB_PORT=5432 block uncommented).
+    // PostgreSQL driver.
     runtimeOnly "org.postgresql:postgresql:42.7.13"
+
+    // Oracle driver ("thin", pure-Java — no Oracle Instant Client needed).
+    // Oracle now publishes official artifacts straight to Maven Central
+    // under com.oracle.database.jdbc; ojdbc11 targets JDK 11+ (this project
+    // is on 17), which is why it's ojdbc11 and not the legacy ojdbc8/ojdbc6.
+    runtimeOnly "com.oracle.database.jdbc:ojdbc11:23.8.0.25.04"
+
+    // SQL Server driver. The `jre11` classifier is the one to use on JDK
+    // 11+ (this project is on 17) — the separate `jre8` build exists only
+    // for projects still stuck on Java 8.
+    runtimeOnly "com.microsoft.sqlserver:mssql-jdbc:13.4.0.jre11"
 
     // --- .env loading is handled explicitly in Application.groovy
     //     (loadDotEnv()) rather than via a third-party auto-detecting
