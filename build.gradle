@@ -18,6 +18,12 @@ plugins {
     // never match Boot 3's jakarta-only SpringBootServletInitializer. 2.7.18
     // is the last, Java-17-compatible release of the 2.x line.
     id "org.springframework.boot" version "2.7.18"
+    // Enables `./gradlew bootWar` — a deployable WAR for an external
+    // javax.servlet container (Tomcat 9.x, JBoss EAP 7.4). `bootRun` and
+    // `bootJar` (embedded-Tomcat standalone jar) keep working unchanged;
+    // see the providedRuntime note on spring-boot-starter-tomcat below for
+    // why all three can coexist.
+    id "war"
 }
 
 version "0.1.0"
@@ -55,7 +61,18 @@ dependencies {
     implementation "org.springframework.boot:spring-boot-autoconfigure"
     implementation "org.grails:grails-core"
     implementation "org.springframework.boot:spring-boot-starter-actuator"
-    implementation "org.springframework.boot:spring-boot-starter-tomcat"
+    // providedRuntime (not implementation): keeps embedded Tomcat on the
+    // classpath for `bootRun`/`bootJar`/tests, but EXCLUDES it from
+    // `bootWar`'s WEB-INF/lib — an external servlet container (Tomcat,
+    // JBoss) supplies its own, and bundling both would conflict.
+    providedRuntime "org.springframework.boot:spring-boot-starter-tomcat"
+
+    // Grails 6.2's internal Micronaut layer needs jakarta.annotation.PreDestroy
+    // (NOT javax.annotation — that's a different, older artifact version) at
+    // runtime. Previously satisfied transitively via spring-boot-starter-tomcat
+    // when that was `implementation`; now that it's `providedRuntime` (excluded
+    // from bootWar's WEB-INF/lib), declare it directly so bootWar keeps working:
+    implementation "jakarta.annotation:jakarta.annotation-api:2.1.1"
     implementation "org.grails:grails-web-boot"
     implementation "org.grails:grails-logging"
     implementation "org.grails:grails-plugin-rest"
@@ -126,6 +143,14 @@ dependencies {
 
 springBoot {
     mainClass = 'rentalapp.Application'
+}
+
+// Applying the `war` plugin disables `bootJar` by default (Spring Boot
+// assumes if you're building a WAR, you don't also want a jar). Re-enable
+// it explicitly so `./gradlew bootJar` still produces the standalone
+// embedded-Tomcat executable jar, alongside `bootWar`.
+bootJar {
+    enabled = true
 }
 
 bootRun {

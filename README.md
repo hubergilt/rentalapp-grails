@@ -1,8 +1,8 @@
 # rentalapp
 
-A Grails 6.x admin/CRUD dashboard over the **existing** `rentaldb` MySQL 8
-database (tenants, rooms, tenancies, rent_payments, security_deposits, plus
-the `current_tenancies` view). See https://github.com/hubergilt/rentaldb for
+A Grails 6.x admin/CRUD dashboard over the **existing** `rentaldb` database
+(tenants, rooms, tenancies, rent_payments, security_deposits, plus the
+`current_tenancies` view). See https://github.com/hubergilt/rentaldb for
 the database project itself.
 
 **This app never creates or alters the schema.** `rentaldb`'s tables are
@@ -15,15 +15,20 @@ pinned with `dbCreate: none` (permanent, in `application.yml`) and
 ## Stack
 
 - Grails 6.2.2 / **Groovy 3.0.23** / Java 17+ — see note below on the Groovy version
-- **Spring Boot 2.7.18** (embedded Tomcat 9, `javax.servlet`) — see note below
+- **Spring Boot 2.7.18** (`javax.servlet`) — see note below
 - Gradle (standard Grails build), no Maven
-- MySQL Connector/J 8.4.x
+- **MySQL, PostgreSQL, Oracle, or SQL Server** — all four JDBC drivers ship
+  in `build.gradle`; which one is active is picked in `application.yml`
+  (see "Switching database engines" below), not hardcoded
 - GORM/Hibernate 5, mapped onto the live schema (`dbCreate: none`)
 - Grails scaffolding (dynamic + generated) for every CRUD screen — there is
   no separate hand-built frontend
 - A simple, dependency-free form-based login (BCrypt-hashed password from an
   env var) gates the whole app; there's no GORM-backed user table, since
   auth doesn't belong in Flyway's schema
+- Runs standalone (`bootRun`/`bootJar`, embedded Tomcat) **or** deployed as a
+  WAR (`bootWar`) into an external servlet container — see "Deploying to an
+  external servlet container" below
 
 > **Note on Groovy 4.x:** the original brief called for Groovy 4.x. In
 > practice, the Grails 6.2.x line's own dependency management still pins
@@ -49,19 +54,31 @@ pinned with `dbCreate: none` (permanent, in `application.yml`) and
 > of the 2.x line, still fully Java 17-compatible) matches what Grails
 > 6.2.x actually expects. As with Groovy, genuine Spring Boot 3/jakarta
 > support is a **Grails 7.x** upgrade, not a Grails 6.2.x config tweak —
-> both land together if you do that upgrade later.
+> both land together if you do that upgrade later. This is also why WAR
+> deployment only targets `javax.servlet`-generation containers (Tomcat 9,
+> JBoss EAP 7.4) — see the deployment section below.
 
 ## Project layout
 
 ```
 rentalapp/
-├── build.gradle                     Grails 6 web+gsp app (Spring Boot 2.7 / embedded Tomcat)
+├── build.gradle                     Grails 6 web+gsp app; embedded Tomcat
+│                                     for bootRun/bootJar, `war` plugin +
+│                                     providedRuntime for bootWar
+├── Makefile                         war / deploy / undeploy / redeploy
+│                                     targets for the external-Tomcat workflow
+├── .gitignore                       .env, build/, *.back, logs/, IDE files
 ├── settings.gradle
 ├── gradle.properties
 ├── .env.example                     copy to .env, fill in real values
 ├── grails-app/
+│   ├── init/rentalapp/
+│   │   └── Application.groovy       loads .env (static initializer — runs
+│   │                                 under bootRun/bootJar AND WAR deployment)
 │   ├── conf/
-│   │   ├── application.yml          branding, datasource, dbCreate: none
+│   │   ├── application.yml          branding; datasource (one commented
+│   │   │                             block per DB engine — see below);
+│   │   │                             dbCreate: none
 │   │   └── logback.xml
 │   ├── domain/rentalapp/            Tenant, Room, Tenancy, RentPayment,
 │   │                                 SecurityDeposit, CurrentTenancy (view)
@@ -78,24 +95,32 @@ rentalapp/
 │                                     the inline deposit-installments widget
 │                                     — plain Spring Boot static resources,
 │                                     no asset-pipeline plugin (see note below)
-└── src/main/groovy/rentalapp/       HashPassword helper (./gradlew hashPassword)
+└── src/main/groovy/rentalapp/       HashPassword helper (./gradlew hashPassword),
+                                      WebConfig (static resource handlers)
 ```
 
 > **Note on asset-pipeline:** Grails apps conventionally use the
 > `asset-pipeline` plugin for `grails-app/assets`. This project deliberately
 > doesn't use it — for three small static files (CSS/JS/logo), plain Spring
 > Boot static resource serving is simpler and is one less plugin/version to
-> track — they're served directly from `src/main/resources/static/`.
+> track — they're served directly from `src/main/resources/static/`. Every
+> reference to these in a GSP (`main.gsp`, `login/auth.gsp`) is prefixed
+> with `${request.contextPath}` rather than a bare `/css/...` — required so
+> assets resolve correctly whether the app is running at the root (`bootRun`)
+> or under a subpath like `/rentalapp` (WAR deployment).
 
 ## 1. Prerequisites
 
 - Java 17+
-- A running MySQL 8 instance with the `rentaldb` schema already migrated by
-  Flyway (see the `rentaldb` project's own README/Makefile — `flyway migrate`
-  against `flyway.conf`). **Run that first; rentalapp assumes the tables
-  already exist.**
+- A running MySQL 8, PostgreSQL, Oracle, or SQL Server instance with the
+  `rentaldb` schema already migrated by Flyway (see the `rentaldb` project's
+  own README/Makefile — `flyway migrate` against `flyway.conf`). **Run that
+  first; rentalapp assumes the tables already exist**, regardless of engine.
 - Gradle itself is *not* required to be pre-installed if you generate the
   wrapper (see below), but you do need network access the first time.
+- Only needed for WAR deployment: an external servlet container. See
+  "Deploying to an external servlet container" for which ones are actually
+  compatible — not every Tomcat/JBoss/WildFly version works.
 
 ## 2. Generate the Gradle wrapper (one-time)
 
@@ -121,9 +146,11 @@ Edit `.env`:
 | Variable | Purpose |
 |---|---|
 | `DB_NAME` | schema name, default `rentaldb` |
-| `DB_USERNAME` / `DB_PASSWORD` | MySQL credentials for rentalapp's own (least-privilege) DB user |
-| `DB_HOST` / `DB_PORT` | plain TCP connection (default path) |
-| `DB_SOCKET` | **use instead of** `DB_HOST`/`DB_PORT` if MySQL is only reachable via a non-default unix socket (e.g. started through an environment-modules `module load mysql/8.x` setup rather than the OS package's default socket). Takes priority when set. Connected to via [junixsocket](https://github.com/kohlschutter/junixsocket)'s `AFUNIXDatabaseSocketFactory`. |
+| `DB_USERNAME` / `DB_PASSWORD` | DB credentials for rentalapp's own (least-privilege) user |
+| `DB_HOST` / `DB_PORT` | plain TCP connection, shared by all engines |
+| `DB_SOCKET` | **MySQL only** — use instead of `DB_HOST`/`DB_PORT` if MySQL is only reachable via a non-default unix socket (e.g. started through an environment-modules `module load mysql/8.x` setup rather than the OS package's default socket). Takes priority when set. Connected to via [junixsocket](https://github.com/kohlschutter/junixsocket)'s `AFUNIXDatabaseSocketFactory`. |
+| `DB_SERVICE_NAME` | **Oracle only** — falls back to `DB_NAME` if unset |
+| `DB_ENCRYPT` / `DB_TRUST_SERVER_CERTIFICATE` | **SQL Server only** — default `true` for both |
 | `DB_URL` | escape hatch — a fully-formed JDBC URL, used verbatim if set, overriding everything else |
 | `DB_LOG_SQL` | `true` to see Hibernate SQL in dev |
 | `APP_NAME` / `APP_TAGLINE` / `APP_THEME` | branding (`slate` \| `ocean` \| `sunset`) |
@@ -132,11 +159,37 @@ Edit `.env`:
 `.env` is loaded automatically at startup by `Application.groovy`'s own
 `loadDotEnv()` — a small, explicit loader (not a third-party auto-detecting
 library), so it's easy to see exactly what got picked up: it prints how
-many values it loaded, and from which path, on every `bootRun`. It looks
-for `.env` in the directory you run `./gradlew bootRun` from (the project
-root). Real exported OS environment variables always take priority over
-`.env` if both are set. Nothing sensitive is ever hardcoded in
-`application.yml`.
+many values it loaded, and from which path, every time. It runs from a
+`static { }` initializer rather than `main()`, since a WAR deployed into an
+external container never calls this class's `main()` at all — a static
+initializer runs regardless of entry point.
+
+**Where it looks for `.env` differs by how you're running it:**
+- `bootRun` / `bootJar`: the directory you ran the command from (your
+  project root).
+- WAR deployed into an external container: `$CATALINA_BASE/.env` (e.g.
+  `/opt/tomcat/9.0.113/.env`) — **not** anywhere inside the WAR itself, and
+  not your project directory. See the deployment section below for why, and
+  for what to actually put there.
+
+Real exported OS environment variables always take priority over `.env` if
+both are set. Nothing sensitive is ever hardcoded in `application.yml`.
+
+### Switching database engines
+
+`application.yml`'s `dataSource:` block has one commented-out option per
+engine (MySQL over TCP, MySQL over a unix socket, PostgreSQL, Oracle, SQL
+Server) — each fully self-contained (`driverClassName` + `dialect` + `url`),
+with the `url` built entirely from `${VAR:default}` placeholders reading
+`.env`. To switch engines: comment out the currently-active block, uncomment
+the one you want, restart. That's the only file that needs touching — no
+code change, and `.env`'s connection-detail variables (`DB_HOST`, `DB_PORT`,
+etc.) work the same regardless of which block is active.
+
+**Nothing validates that exactly one block is uncommented at a time** — if
+two are ever left active by mistake, Spring silently uses whichever
+`driverClassName`/`dialect`/`url` key appears *last* in the file, with no
+warning. Worth a quick look at the file after editing it.
 
 ### Setting the admin password
 
@@ -151,15 +204,22 @@ needed):
 
 Copy the printed `$2a$...` string into `.env` as `ADMIN_PASSWORD_HASH`.
 
-### Creating rentalapp's own MySQL user (least privilege)
+> `make pass` runs the same task using the `PASSWD` variable in the
+> `Makefile` — convenient, but that means the plaintext password lives in a
+> file that's normally committed to git. Prefer `./gradlew hashPassword
+> -Ppassword=...` directly, or override on the command line
+> (`make pass PASSWD='...'`), rather than editing the Makefile itself.
 
-Run once, as a MySQL admin, against the already-Flyway-migrated `rentaldb`:
+### Creating rentalapp's own database user (least privilege)
+
+The exact syntax is engine-specific, but the intent is the same everywhere:
+grant only `SELECT`/`INSERT`/`UPDATE`/`DELETE` on the already-migrated
+`rentaldb` schema — never `CREATE`/`ALTER`/`DROP`/`INDEX`/`REFERENCES`,
+since schema changes are Flyway's job only. For MySQL:
 
 ```sql
 CREATE USER 'rentalapp'@'localhost' IDENTIFIED BY 'changeme';
 GRANT SELECT, INSERT, UPDATE, DELETE ON rentaldb.* TO 'rentalapp'@'localhost';
--- Deliberately NOT granted: CREATE, ALTER, DROP, INDEX, REFERENCES —
--- schema changes are Flyway's job only.
 FLUSH PRIVILEGES;
 ```
 
@@ -231,7 +291,9 @@ grails generate-views rentalapp.NewThing
 
 then hand-add `static mapping = { table '...'; version false }` and wire it
 into `main.gsp`'s nav and `UrlMappings.groovy`, same as the existing
-entities.
+entities. If the new view references a static asset, prefix its path with
+`${request.contextPath}` (see the asset-pipeline note above) so it still
+works under WAR deployment, not just `bootRun`.
 
 ## 8. Tests
 
@@ -241,3 +303,83 @@ entities.
 
 Tests run against an in-memory H2 database (see the `test` environment block
 in `application.yml`) — they never touch the real, Flyway-owned `rentaldb`.
+
+## 9. Deploying to an external servlet container
+
+Besides `bootRun`/`bootJar` (embedded Tomcat, for local dev), the project
+also builds a deployable WAR via `./gradlew bootWar`, for hosting inside an
+external servlet container rather than running standalone.
+
+### Container compatibility
+
+Grails 6.2.x / Spring Boot 2.7 are built on the older `javax.servlet.*` API,
+not the newer `jakarta.servlet.*` one (Jakarta EE 9+). Only containers still
+on the `javax.*` generation work without modification:
+
+| Container | Servlet namespace | Compatible? |
+|---|---|---|
+| **Tomcat 9.x** | `javax.*` | ✅ Yes |
+| Tomcat 10/11 | `jakarta.*` | ❌ No |
+| **JBoss EAP 7.4** | `javax.*` | ✅ Yes |
+| JBoss EAP 8.x | `jakarta.*` | ❌ No |
+| WildFly (any current version) | `jakarta.*` | ❌ No |
+
+Using an incompatible container would require migrating the whole project
+to Spring Boot 3/Grails 7 first (see the Spring Boot note above) — it's not
+a WAR-packaging setting.
+
+### One-time server setup (Tomcat 9 example)
+
+Run Tomcat under its own dedicated service account rather than a personal
+user account:
+
+```bash
+sudo groupadd --system tomcat
+sudo useradd --system --gid tomcat --no-create-home --shell /usr/sbin/nologin tomcat
+sudo usermod -aG tomcat "$USER"          # log out/in (or `newgrp tomcat`) after this
+sudo chown -R tomcat:tomcat /opt/tomcat/9.0.113
+sudo chmod 2775 /opt/tomcat/9.0.113/webapps
+```
+
+The `2` (setgid) on `webapps/` means new top-level entries inherit the
+`tomcat` group, so both you and the Tomcat process can deploy there without
+needing `sudo` for every deploy. It does **not** make Tomcat's own extracted
+subdirectories (`WEB-INF/`, etc.) group-writable, though — those are created
+with the standard `755`, owner-write-only. Deleting an already-deployed
+app's exploded directory (not just the `.war` file) does need `sudo` for
+that reason; see the Makefile's `undeploy` target.
+
+Create a separate `.env` for the server itself — the WAR never bundles
+`.env` (it's gitignored, holds real secrets):
+
+```bash
+sudo -u tomcat cp .env /opt/tomcat/9.0.113/.env
+sudo chmod 600 /opt/tomcat/9.0.113/.env
+```
+
+### Building and deploying
+
+```bash
+make war        # ./gradlew clean bootWar, renamed to a fixed rentalapp.war
+make deploy      # copies it into Tomcat's webapps/
+make undeploy    # removes both the WAR and its exploded directory
+make redeploy    # build + deploy in one step
+```
+
+The WAR is deliberately renamed from Gradle's default
+`rentalapp-<version>.war` to a fixed `rentalapp.war` — Tomcat derives the
+deployed context path from the filename, so the versioned name would
+otherwise deploy at `/rentalapp-0.1.0` instead of `/rentalapp`.
+
+**The Makefile does not start or stop Tomcat itself.** `tomcat-start` /
+`tomcat-stop` are shell aliases provided by the `srv/tomcat` environment
+module, and aliases aren't reliably expanded inside `make`'s non-interactive
+recipe shell. Wrap the Makefile targets with those yourself:
+
+```bash
+tomcat-stop && make deploy && tomcat-start
+tomcat-logs   # tails catalina.out
+```
+
+Once running, the app is served at `http://localhost:8080/rentalapp/` — not
+the root path, unlike `bootRun`.

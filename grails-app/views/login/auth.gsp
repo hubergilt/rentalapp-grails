@@ -6,7 +6,7 @@
 <body>
 <div class="login-panel">
     <div class="login-brand">
-        <img src="/images/rentalapp-logo.svg" alt="" class="login-logo" />
+        <img src="${request.contextPath}/images/rentalapp-logo.svg" alt="" class="login-logo" />
         <h1>${grailsApplication.config.getProperty('rentalapp.brand.appName')}</h1>
         <p>${grailsApplication.config.getProperty('rentalapp.brand.tagline')}</p>
     </div>

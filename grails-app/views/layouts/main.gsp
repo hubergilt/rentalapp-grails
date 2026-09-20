@@ -4,15 +4,15 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title><g:layoutTitle default="${grailsApplication.config.getProperty('rentalapp.brand.appName')}" /></title>
-    <link rel="icon" href="/images/rentalapp-logo.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/css/application.css" />
+    <link rel="icon" href="${request.contextPath}/images/rentalapp-logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="${request.contextPath}/css/application.css" />
     <g:layoutHead />
 </head>
 <body class="theme-${grailsApplication.config.getProperty('rentalapp.brand.theme') ?: 'slate'}">
     <g:if test="${session.rentalappUser}">
         <header class="app-header">
             <div class="brand">
-                <img src="/images/rentalapp-logo.svg" alt="" class="brand-logo" />
+                <img src="${request.contextPath}/images/rentalapp-logo.svg" alt="" class="brand-logo" />
                 <div>
                     <span class="brand-name">${grailsApplication.config.getProperty('rentalapp.brand.appName')}</span>
                     <span class="brand-tagline">${grailsApplication.config.getProperty('rentalapp.brand.tagline')}</span>
@@ -44,6 +44,6 @@
         <span>${grailsApplication.config.getProperty('rentalapp.brand.appName')} &middot; data lives in <code>rentaldb</code>, schema managed by Flyway</span>
     </footer>
 
-    <script src="/js/application.js"></script>
+    <script src="${request.contextPath}/js/application.js"></script>
 </body>
 </html>

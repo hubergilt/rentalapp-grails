@@ -139,9 +139,9 @@ dataSource:
   # ---------------------------------------------------------------------
 
   # --- MySQL (plain TCP) ---
-  # driverClassName: com.mysql.cj.jdbc.Driver
-  # dialect: org.hibernate.dialect.MySQL8Dialect
-  # url: "${DB_URL:jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:rentaldb}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8&useUnicode=true}"
+  driverClassName: com.mysql.cj.jdbc.Driver
+  dialect: org.hibernate.dialect.MySQL8Dialect
+  url: "${DB_URL:jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:rentaldb}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC&characterEncoding=UTF-8&useUnicode=true}"
 
   # --- MySQL (unix socket, e.g. environment-modules-managed MySQL) ---
   # Fill in DB_SOCKET in .env with the socket path; leave DB_HOST/DB_PORT unused.
@@ -161,9 +161,9 @@ dataSource:
   #url: "${DB_URL:jdbc:oracle:thin:@//${DB_HOST:localhost}:${DB_PORT:1521}/${DB_SERVICE_NAME:${DB_NAME:rentaldb}}}"
 
   # --- SQL Server ---
-  driverClassName: com.microsoft.sqlserver.jdbc.SQLServerDriver
-  dialect: org.hibernate.dialect.SQLServerDialect
-  url: "${DB_URL:jdbc:sqlserver://${DB_HOST:localhost}:${DB_PORT:1433};databaseName=${DB_NAME:rentaldb};encrypt=${DB_ENCRYPT:true};trustServerCertificate=${DB_TRUST_SERVER_CERTIFICATE:true}}"
+  #driverClassName: com.microsoft.sqlserver.jdbc.SQLServerDriver
+  #dialect: org.hibernate.dialect.SQLServerDialect
+  #url: "${DB_URL:jdbc:sqlserver://${DB_HOST:localhost}:${DB_PORT:1433};databaseName=${DB_NAME:rentaldb};encrypt=${DB_ENCRYPT:true};trustServerCertificate=${DB_TRUST_SERVER_CERTIFICATE:true}}"
 
   dbCreate: none # <-- permanent. Flyway (external) owns the schema.
   username: "${DB_USERNAME:rentalapp}"

@@ -18,6 +18,24 @@ class LoginController {
 
     private static final BCryptPasswordEncoder ENCODER = new BCryptPasswordEncoder()
 
+    /**
+     * Root ("/") maps here (see UrlMappings) instead of straight to auth().
+     * This does nothing but issue a real HTTP redirect — no view rendering
+     * — specifically so auth()'s render(view: 'auth') only ever runs from a
+     * genuine /login/auth request. See the comment in UrlMappings.groovy
+     * for why that distinction matters.
+     *
+     * `redirect(uri: ...)` is used rather than `redirect(controller:
+     * 'login', action: 'auth')` — the latter reverse-maps through
+     * UrlMappings, which could just as easily resolve back to "/" itself
+     * (since both map to the same controller+action), recreating the exact
+     * loop this exists to avoid. An explicit uri sidesteps that ambiguity;
+     * Grails still prepends the app's context path automatically.
+     */
+    def index() {
+        redirect uri: '/login/auth'
+    }
+
     def auth() {
         if (session.rentalappUser) {
             redirect controller: 'tenant', action: 'index'
