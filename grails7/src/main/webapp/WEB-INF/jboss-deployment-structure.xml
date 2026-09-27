@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  JBoss EAP / WildFly only — Tomcat and other containers ignore this file
+  entirely, so it's safe to always bundle regardless of deployment target.
+  For this Grails 7 (Jakarta EE) build, that means JBoss EAP 8.x / WildFly
+  27+ specifically — the javax-based EAP 7.4/WildFly ≤26 generation isn't
+  namespace-compatible with this app at all, independent of this file.
+
+  Without this, JBoss injects its own logging subsystem (org.jboss.logmanager
+  + its own SLF4J binding, slf4j-jboss-logmanager) into every deployment by
+  default, which wins the classloading race against this WAR's own bundled
+  Logback binding — causing Spring Boot's LogbackLoggingSystem to fail with
+  "LoggerFactory is not a Logback LoggerContext" during startup. Excluding
+  the logging subsystem here means JBoss leaves this deployment's own
+  Logback/SLF4J jars (in WEB-INF/lib) alone.
+
+  Confirmed working as-is (unchanged content) against JBoss EAP 8.1 via a
+  disposable test app during this migration.
+-->
+<jboss-deployment-structure>
+    <deployment>
+        <exclude-subsystems>
+            <subsystem name="logging" />
+        </exclude-subsystems>
+        <exclusions>
+            <module name="org.jboss.logging" />
+            <module name="org.slf4j" />
+            <module name="org.slf4j.impl" />
+        </exclusions>
+    </deployment>
+</jboss-deployment-structure>

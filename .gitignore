@@ -1,0 +1,43 @@
+/.gradle/
+/build/
+*.class
+*.jar
+*.war
+*.ear
+/hlogs/
+/logs/
+/*.log
+env/.env
+env/.env.example
+/.idea/
+/.vscode/
+*.orig
+*.received
+
+# Gradle
+.gradle/
+build/
+
+# Grails
+grails-app/**
+!grails-app/controllers
+!grails-app/services
+!grails-app/domain
+!grails-app/utils
+!grails-app/views
+!grails-app/conf
+
+# IDE
+.idea/
+.vscode/
+
+# Logs
+logs/
+
+# OS
+.DS_Store
+*.swp
+*~
+
+# Environment (uncomment if you don't want to track env files)
+# .env

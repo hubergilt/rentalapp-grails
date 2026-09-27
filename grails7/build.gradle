@@ -1,0 +1,184 @@
+buildscript {
+    repositories {
+        mavenCentral()
+        maven { url = 'https://repo.grails.org/grails/restricted' }
+    }
+    dependencies {
+        // Apache Grails 7 manages its own plugin/artifact versions via this
+        // BOM, keyed off grailsVersion alone — unlike Grails 6.2.x, there's
+        // no separate grailsGradlePluginVersion property to keep in sync.
+        classpath platform("org.apache.grails:grails-bom:$grailsVersion")
+        classpath "org.apache.grails:grails-gradle-plugins"
+    }
+}
+
+version "0.1.0"
+group "rentalapp"
+
+apply plugin: "eclipse"
+apply plugin: "idea"
+apply plugin: "war"
+// Grails moved from the org.grails / classpath-applied plugin style (6.2.x)
+// to Apache-governed org.apache.grails plugin IDs, applied via `apply
+// plugin:` directly — the old `configurations { console }` workaround for
+// grails-web's internal lookup is no longer needed here; declaring the
+// real `console` dependency below (matching Grails 7's own default app
+// template) supplies it instead.
+apply plugin: "org.apache.grails.gradle.grails-web"
+apply plugin: "org.apache.grails.gradle.grails-gsp"
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://repo.grails.org/grails/restricted' }
+}
+
+dependencies {
+    // --- Grails core ---
+    console "org.apache.grails:grails-console"
+    developmentOnly "org.springframework.boot:spring-boot-devtools"
+    implementation platform("org.apache.grails:grails-bom:$grailsVersion")
+    implementation "org.springframework.boot:spring-boot-starter-logging"
+    implementation "org.springframework.boot:spring-boot-starter-validation"
+    implementation "org.springframework.boot:spring-boot-autoconfigure"
+    implementation "org.springframework.boot:spring-boot-starter"
+    implementation "org.apache.grails:grails-core"
+    implementation "org.springframework.boot:spring-boot-starter-actuator"
+    // providedRuntime (not implementation): keeps embedded Tomcat on the
+    // classpath for `bootRun`/`bootJar`/tests, but EXCLUDES it from
+    // `bootWar`'s WEB-INF/lib — an external servlet container (Tomcat,
+    // JBoss) supplies its own, and bundling both causes an
+    // IncompatibleClassChangeError on jakarta.servlet.http.HttpServlet at
+    // deploy time (confirmed against JBoss EAP 8.1 while migrating this
+    // project — see the two providedRuntime lines below).
+    providedRuntime "org.springframework.boot:spring-boot-starter-tomcat"
+    // jakarta.servlet-api itself needs the SAME treatment separately from
+    // the Tomcat starter above — grails-web-boot also pulls it in at
+    // regular implementation scope, which otherwise overrides Tomcat's own
+    // providedRuntime scope for this one jar and puts it back in the WAR's
+    // regular WEB-INF/lib, still triggering the same conflict. No version
+    // pinned — the grails-bom platform above manages it consistently.
+    providedRuntime "jakarta.servlet:jakarta.servlet-api"
+    implementation "org.apache.grails:grails-web-boot"
+    implementation "org.apache.grails:grails-logging"
+    implementation "org.apache.grails:grails-rest-transforms"
+    implementation "org.apache.grails:grails-databinding"
+    implementation "org.apache.grails:grails-services"
+    implementation "org.apache.grails:grails-url-mappings"
+    implementation "org.apache.grails:grails-layout"
+    implementation "org.apache.grails:grails-interceptors"
+    implementation "org.apache.grails:grails-scaffolding"        // dynamic + generated CRUD scaffolding
+    implementation "org.apache.grails:grails-data-hibernate5"    // GORM/Hibernate mapping onto the live schema —
+    // still named "hibernate5" as an Apache Grails artifact id even under
+    // Grails 7; this appears to be a legacy artifact name rather than a
+    // signal of which actual Hibernate major version is pulled in — VERIFY
+    // this at build/runtime: if application.yml's existing dialect class
+    // names (org.hibernate.dialect.MySQL8Dialect, etc.) throw
+    // ClassNotFoundException, that means Hibernate 6 dialect class names
+    // are needed instead and application.yml needs updating. Left AS-IS
+    // here since the artifact name suggests no change is needed, but this
+    // is the one part of this migration not independently confirmed the
+    // way the rest was (via the hello7 test app).
+    implementation "org.apache.grails:grails-gsp"
+    // Branding assets (CSS/JS/logo) stay as plain Spring Boot static
+    // resources from src/main/resources/static — deliberately NOT adopting
+    // Grails 7's default asset-pipeline plugin (visible in a freshly
+    // generated app's build.gradle) to keep this project's original,
+    // simpler static-resource approach unchanged.
+
+    // --- Database: schema owned by Flyway (external), engine picked via .env ---
+    // All four drivers are declared so DB_ENGINE in .env can pick any of
+    // them without a build.gradle change — see ENGINE_DATASOURCE_DEFAULTS in
+    // Application.groovy for the matching driverClassName/dialect per engine.
+    runtimeOnly "com.mysql:mysql-connector-j:8.4.0"
+    runtimeOnly "com.h2database:h2"                            // used only for the `test` environment
+
+    // Lets Connector/J dial a non-default unix socket (see DB_SOCKET in .env.example)
+    // instead of only ever connecting over TCP — needed when MySQL is reached
+    // through an environment-modules-managed socket rather than the OS default.
+    runtimeOnly "com.kohlschutter.junixsocket:junixsocket-mysql:2.9.1"
+    // junixsocket-mysql alone only pulls in the Java-side API — the actual
+    // native (.so/.dll) binaries ship in this separate artifact. Without it:
+    // UnsatisfiedLinkError: Could not load native library junixsocket-native.
+    runtimeOnly "com.kohlschutter.junixsocket:junixsocket-native-common:2.9.1"
+
+    // PostgreSQL driver.
+    runtimeOnly "org.postgresql:postgresql:42.7.13"
+
+    // Oracle driver ("thin", pure-Java — no Oracle Instant Client needed).
+    // Oracle now publishes official artifacts straight to Maven Central
+    // under com.oracle.database.jdbc; ojdbc11 targets JDK 11+ (this project
+    // is on 17), which is why it's ojdbc11 and not the legacy ojdbc8/ojdbc6.
+    runtimeOnly "com.oracle.database.jdbc:ojdbc11:23.8.0.25.04"
+
+    // SQL Server driver. The `jre11` classifier is the one to use on JDK
+    // 11+ (this project is on 17) — the separate `jre8` build exists only
+    // for projects still stuck on Java 8.
+    runtimeOnly "com.microsoft.sqlserver:mssql-jdbc:13.4.0.jre11"
+
+    // --- .env loading is handled explicitly in Application.groovy
+    //     (loadDotEnv()) rather than via a third-party auto-detecting
+    //     library — see the comment there for why. ---
+
+    // --- Password hashing only (BCrypt) for the simple form-based login;
+    //     intentionally NOT pulling in the whole Spring Security Core plugin,
+    //     since there's no GORM-backed User/Role table in rentaldb's schema.
+    //     6.x targets Spring Framework 6 (Boot 3.5's line) — the 5.8.x
+    //     release used under Grails 6.2/Boot 2.7 targeted Spring Framework 5
+    //     and won't resolve cleanly here. ---
+    implementation "org.springframework.security:spring-security-crypto:6.4.4"
+
+    // --- Testing ---
+    testImplementation "org.apache.grails:grails-testing-support-datamapping"
+    testImplementation "org.spockframework:spock-core"
+    testImplementation "org.apache.grails:grails-testing-support-web"
+    testImplementation "org.mockito:mockito-core"
+}
+
+compileJava.options.release = 17
+
+springBoot {
+    mainClass = 'rentalapp.Application'
+}
+
+// Applying the `war` plugin disables `bootJar` by default (Spring Boot
+// assumes if you're building a WAR, you don't also want a jar). Re-enable
+// it explicitly so `./gradlew bootJar` still produces the standalone
+// embedded-Tomcat executable jar, alongside `bootWar`.
+bootJar {
+    enabled = true
+}
+
+bootRun {
+    workingDir = project.projectDir   // guarantees Application.groovy finds .env at the project root
+}
+
+tasks.withType(GroovyCompile) {
+    configure(groovyOptions) {
+        forkOptions.jvmArgs = ['-Xmx1024m']
+    }
+}
+
+// -----------------------------------------------------------------------
+// Convenience task: `./gradlew serve` == `./gradlew bootRun`
+// -----------------------------------------------------------------------
+tasks.register('serve') {
+    group = 'application'
+    description = 'Alias for bootRun — starts the embedded Tomcat server for rentalapp.'
+    dependsOn 'bootRun'
+}
+
+// -----------------------------------------------------------------------
+// Convenience task: BCrypt-hash the admin password for ADMIN_PASSWORD_HASH.
+// Usage: ./gradlew hashPassword -Ppassword=yourRealPassword
+// -----------------------------------------------------------------------
+tasks.register('hashPassword', JavaExec) {
+    group = 'application'
+    description = 'Prints a BCrypt hash for a password — usage: ./gradlew hashPassword -Ppassword=yourRealPassword'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'rentalapp.HashPassword'
+    args = [project.findProperty('password')?.toString() ?: '']
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
