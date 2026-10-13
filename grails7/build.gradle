@@ -57,6 +57,7 @@ dependencies {
     // providedRuntime scope for this one jar and puts it back in the WAR's
     // regular WEB-INF/lib, still triggering the same conflict. No version
     // pinned — the grails-bom platform above manages it consistently.
+    implementation "net.bull.javamelody:javamelody-spring-boot-starter:2.9.0"
     providedRuntime "jakarta.servlet:jakarta.servlet-api"
     implementation "org.apache.grails:grails-web-boot"
     implementation "org.apache.grails:grails-logging"
@@ -181,4 +182,8 @@ tasks.register('hashPassword', JavaExec) {
 
 tasks.named('test') {
     useJUnitPlatform()
+}
+
+war {
+    webXml = file('src/main/webapp/WEB-INF/web.xml')
 }
